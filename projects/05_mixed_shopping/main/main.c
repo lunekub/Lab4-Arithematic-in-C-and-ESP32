@@ -8,10 +8,10 @@ static const char *TAG = "SHOPPING_MATH";
 
 // โครงสร้างข้อมูลสินค้า
 typedef struct {
-    char name[20];          // ชื่อสินค้า
-    int quantity;           // จำนวน
-    float price_per_unit;   // ราคาต่อหน่วย
-    float total_price;      // ราคารวม
+    char name[20];           // ชื่อสินค้า
+    int quantity;            // จำนวน
+    float price_per_unit;    // ราคาต่อหน่วย
+    float total_price;       // ราคารวม
 } product_t;
 
 // ฟังก์ชันคำนวณราคาสินค้า
@@ -35,9 +35,19 @@ float calculate_total_bill(product_t products[], int count) {
     return total;
 }
 
-// ฟังก์ชันใช้ส่วนลด
-float apply_discount(float total, float discount) {
+// ฟังก์ชันใช้ส่วนลด (เป็นจำนวนเงิน)
+float apply_fixed_discount(float total, float discount) {
     return total - discount;
+}
+
+// ฟังก์ชันใช้ส่วนลด (เป็นเปอร์เซ็นต์)
+float apply_percent_discount(float total, float discount_percent) {
+    return total * (1 - (discount_percent / 100.0));
+}
+
+// ฟังก์ชันคำนวณ VAT
+float calculate_vat(float amount, float vat_rate_percent) {
+    return amount * (vat_rate_percent / 100.0);
 }
 
 // ฟังก์ชันแบ่งจ่าย
@@ -51,19 +61,21 @@ float split_payment(float amount, int people) {
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "🛒 เริ่มต้นโปรแกรมซื้อของที่ตลาด 🛒");
-    ESP_LOGI(TAG, "=====================================");
+    ESP_LOGI(TAG, "🛒 เริ่มต้นโปรแกรมซื้อของที่ตลาด (ฉบับปรับปรุง) 🛒");
+    ESP_LOGI(TAG, "=================================================");
     
     // ข้อมูลการซื้อของ
     product_t products[] = {
         {"แอปเปิ้ล", 6, 15.0, 0.0},
         {"กล้วย", 12, 8.0, 0.0},
-        {"ส้ม", 8, 12.0, 0.0}
+        {"ส้ม", 8, 12.0, 0.0},
+        {"ช็อกโกแลต", 5, 50.0, 0.0} // เพิ่มสินค้าที่ชอบ: ช็อกโกแลต
     };
     int product_count = sizeof(products) / sizeof(products[0]);
     
-    float discount = 20.0;      // ส่วนลด
-    int people = 3;             // จำนวนคนที่จะแบ่งจ่าย
+    float discount_percent = 10.0; // ส่วนลด 10%
+    float vat_rate = 7.0;         // ภาษี VAT 7%
+    int people = 3;               // จำนวนคนที่จะแบ่งจ่าย
     
     // แสดงโจทย์
     ESP_LOGI(TAG, "📖 โจทย์:");
@@ -72,7 +84,8 @@ void app_main(void)
         ESP_LOGI(TAG, "   - %s: %d หน่วย หน่วยละ %.0f บาท", 
                  products[i].name, products[i].quantity, products[i].price_per_unit);
     }
-    ESP_LOGI(TAG, "   - มีส่วนลด: %.0f บาท", discount);
+    ESP_LOGI(TAG, "   - มีส่วนลด: %.0f%%", discount_percent);
+    ESP_LOGI(TAG, "   - มีภาษี VAT: %.0f%%", vat_rate);
     ESP_LOGI(TAG, "   - แบ่งจ่าย: %d คน", people);
     ESP_LOGI(TAG, "");
     
@@ -93,21 +106,28 @@ void app_main(void)
     
     // รวมราคาทั้งหมด
     ESP_LOGI(TAG, "   2. รวมราคาทั้งหมด (การบวก):");
-    ESP_LOGI(TAG, "      %.0f + %.0f + %.0f = %.0f บาท", 
-             products[0].total_price, products[1].total_price, 
-             products[2].total_price, subtotal);
+    ESP_LOGI(TAG, "      %.0f บาท (รวมสินค้าทั้งหมด)", subtotal);
     ESP_LOGI(TAG, "");
     
     // หักส่วนลด
-    float discounted_total = apply_discount(subtotal, discount);
-    ESP_LOGI(TAG, "   3. หักส่วนลด (การลบ):");
-    ESP_LOGI(TAG, "      %.0f - %.0f = %.0f บาท", subtotal, discount, discounted_total);
+    float discounted_total = apply_percent_discount(subtotal, discount_percent);
+    float actual_discount_amount = subtotal - discounted_total;
+    ESP_LOGI(TAG, "   3. หักส่วนลด (%.0f%%):", discount_percent);
+    ESP_LOGI(TAG, "      %.0f - %.2f = %.2f บาท", subtotal, actual_discount_amount, discounted_total);
+    ESP_LOGI(TAG, "");
+
+    // เพิ่ม VAT
+    float vat_amount = calculate_vat(discounted_total, vat_rate);
+    float total_with_vat = discounted_total + vat_amount;
+    ESP_LOGI(TAG, "   4. เพิ่มภาษี VAT (%.0f%%):", vat_rate);
+    ESP_LOGI(TAG, "      VAT ที่ต้องจ่าย: %.2f บาท", vat_amount);
+    ESP_LOGI(TAG, "      ยอดสุทธิรวม VAT: %.2f + %.2f = %.2f บาท", discounted_total, vat_amount, total_with_vat);
     ESP_LOGI(TAG, "");
     
     // แบ่งจ่าย
-    float per_person = split_payment(discounted_total, people);
-    ESP_LOGI(TAG, "   4. แบ่งจ่าย (การหาร):");
-    ESP_LOGI(TAG, "      %.0f ÷ %d = %.2f บาท/คน", discounted_total, people, per_person);
+    float per_person = split_payment(total_with_vat, people);
+    ESP_LOGI(TAG, "   5. แบ่งจ่าย (การหาร):");
+    ESP_LOGI(TAG, "      %.2f ÷ %d = %.2f บาท/คน", total_with_vat, people, per_person);
     ESP_LOGI(TAG, "");
     
     // แสดงใบเสร็จ
@@ -121,70 +141,18 @@ void app_main(void)
     }
     
     ESP_LOGI(TAG, "   ----------------------------------------");
-    ESP_LOGI(TAG, "   ยอดรวม:                    %.0f บาท", subtotal);
-    ESP_LOGI(TAG, "   ส่วนลด:                     -%.0f บาท", discount);
+    ESP_LOGI(TAG, "   ยอดรวม (ก่อนส่วนลด):      %.2f บาท", subtotal);
+    ESP_LOGI(TAG, "   ส่วนลด (%.0f%%):          -%.2f บาท", discount_percent, actual_discount_amount);
+    ESP_LOGI(TAG, "   ยอดหลังหักส่วนลด:         %.2f บาท", discounted_total);
+    ESP_LOGI(TAG, "   VAT (%.0f%%):             +%.2f บาท", vat_rate, vat_amount);
     ESP_LOGI(TAG, "   ========================================");
-    ESP_LOGI(TAG, "   ยอดสุทธิ:                   %.0f บาท", discounted_total);
-    ESP_LOGI(TAG, "   แบ่งจ่าย %d คน:              %.2f บาท/คน", people, per_person);
+    ESP_LOGI(TAG, "   ยอดสุทธิ:                 %.2f บาท", total_with_vat);
+    ESP_LOGI(TAG, "   แบ่งจ่าย %d คน:           %.2f บาท/คน", people, per_person);
     ESP_LOGI(TAG, "   ========================================");
     ESP_LOGI(TAG, "   ขอบคุณที่ใช้บริการ 😊");
     ESP_LOGI(TAG, "");
     
-    // ตัวอย่างเพิ่มเติม
-    ESP_LOGI(TAG, "💡 ตัวอย่างเพิ่มเติม:");
-    
-    // ตัวอย่างที่ 1: เพิ่มสินค้า
-    ESP_LOGI(TAG, "   📝 ถ้าเพิ่มมะม่วง 4 ผล ผลละ 25 บาท:");
-    float mango_total = 4 * 25;
-    float new_subtotal = subtotal + mango_total;
-    float new_discounted = apply_discount(new_subtotal, discount);
-    float new_per_person = split_payment(new_discounted, people);
-    ESP_LOGI(TAG, "      มะม่วง: 4 × 25 = %.0f บาท", mango_total);
-    ESP_LOGI(TAG, "      ยอดรวมใหม่: %.0f + %.0f = %.0f บาท", subtotal, mango_total, new_subtotal);
-    ESP_LOGI(TAG, "      หักส่วนลด: %.0f - %.0f = %.0f บาท", new_subtotal, discount, new_discounted);
-    ESP_LOGI(TAG, "      แบ่งจ่าย: %.0f ÷ %d = %.2f บาท/คน", new_discounted, people, new_per_person);
-    ESP_LOGI(TAG, "");
-    
-    // ตัวอย่างที่ 2: ส่วนลดเปอร์เซ็นต์
-    ESP_LOGI(TAG, "   🏷️ ถ้าใช้ส่วนลด 10%% แทน:");
-    float percent_discount = subtotal * 0.10;  // 10%
-    float percent_discounted = apply_discount(subtotal, percent_discount);
-    float percent_per_person = split_payment(percent_discounted, people);
-    ESP_LOGI(TAG, "      ส่วนลด 10%%: %.0f × 0.10 = %.2f บาท", subtotal, percent_discount);
-    ESP_LOGI(TAG, "      ยอดสุทธิ: %.0f - %.2f = %.2f บาท", subtotal, percent_discount, percent_discounted);
-    ESP_LOGI(TAG, "      แบ่งจ่าย: %.2f ÷ %d = %.2f บาท/คน", percent_discounted, people, percent_per_person);
-    ESP_LOGI(TAG, "");
-    
-    // การประยุกต์ใช้ในชีวิตจริง
-    ESP_LOGI(TAG, "🌟 การประยุกต์ใช้ในชีวิตจริง:");
-    ESP_LOGI(TAG, "   1. การซื้อของเป็นกลุ่ม - ต้องคำนวณค่าใช้จ่าย");
-    ESP_LOGI(TAG, "   2. การแบ่งบิลในร้านอาหาร");
-    ESP_LOGI(TAG, "   3. การคำนวณค่าใช้จ่ายท่องเที่ยว");
-    ESP_LOGI(TAG, "   4. การวางแผนงบประมาณ");
-    ESP_LOGI(TAG, "   5. การคิดราคาขายสินค้า");
-    ESP_LOGI(TAG, "");
-    
-    // วิเคราะห์การใช้การดำเนินการ
-    ESP_LOGI(TAG, "🔍 วิเคราะห์การดำเนินการที่ใช้:");
-    ESP_LOGI(TAG, "   ✓ การคูณ (×): คำนวณราคาสินค้าแต่ละชนิด");
-    ESP_LOGI(TAG, "   ✓ การบวก (+): รวมราคาทั้งหมด");
-    ESP_LOGI(TAG, "   ✓ การลบ (-): หักส่วนลด");
-    ESP_LOGI(TAG, "   ✓ การหาร (÷): แบ่งจ่ายค่าใช้จ่าย");
-    ESP_LOGI(TAG, "   ➜ การรวมการดำเนินการทำให้แก้โจทย์ซับซ้อนได้!");
-    ESP_LOGI(TAG, "");
-    
-    // สรุปการเรียนรู้
-    ESP_LOGI(TAG, "📚 สิ่งที่เรียนรู้:");
-    ESP_LOGI(TAG, "   1. การใช้ struct เก็บข้อมูลที่เกี่ยวข้องกัน");
-    ESP_LOGI(TAG, "   2. การแบ่งปัญหาใหญ่เป็นปัญหาย่อยๆ");
-    ESP_LOGI(TAG, "   3. การรวมการดำเนินการทางคณิตศาสตร์");
-    ESP_LOGI(TAG, "   4. การสร้างฟังก์ชันเฉพาะงาน");
-    ESP_LOGI(TAG, "   5. การแสดงผลในรูปแบบที่เข้าใจง่าย");
-    ESP_LOGI(TAG, "   6. การประยุกต์ใช้ในชีวิตจริง");
-    ESP_LOGI(TAG, "");
-    
     ESP_LOGI(TAG, "🎉 จบโปรแกรมซื้อของที่ตลาด!");
-    ESP_LOGI(TAG, "📖 อ่านต่อในโปรเจคถัดไป: 06_advanced_math");
     
     vTaskDelay(2000 / portTICK_PERIOD_MS);
 }
